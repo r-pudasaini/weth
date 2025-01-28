@@ -39,6 +39,10 @@ import (
 var internalTime time.Time
 var validMonthCodes = map[string]int{"january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12, "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
+var usageStrings = map[string]string{
+	"setTime": "  usage: settime <HOUR> <DAY> <MONTH> <YEAR>",
+}
+
 func setTime(args []string) string {
 
 	if len(args) == 0 {
@@ -46,53 +50,65 @@ func setTime(args []string) string {
 		return "  set time to " + internalTime.Format(time.DateOnly) + " Hour: " + strconv.Itoa(internalTime.Hour())
 	}
 
+	if args[0] == "--help" || args[0] == "-h" {
+		return usageStrings["setTime"]
+	}
+
 	var stateValues = map[string]int{"Hour": internalTime.Hour(), "Day": internalTime.Day(), "Month": int(internalTime.Month()), "Year": internalTime.Year()}
 	var stateNames = [...]string{"Hour", "Day", "Month", "Year"}
+
+	const helpMessage = "\n  for detailed usage, enter: settime --help"
 
 	var bound = min(len(stateNames), len(args))
 
 	for i := 0; i < bound; i++ {
 
 		if args[i] == "*" {
+			// leave wild-card values alone
 			continue
 		}
 
 		runeValue, width := utf8.DecodeRuneInString(args[i])
 
-		if runeValue == '\\' {
+		if runeValue == '/' {
+
+			// if the first char is a slash, then this is a relative value, which must be followed by a
+			// number. Thus, if we find a number, we just add it to its position in the state values array.
 
 			relNum, error := strconv.Atoi(args[i][width:])
 			if error != nil {
-				return "  Error: Expected a number for " + stateNames[i] + ", got " + args[i][width:]
+				return "  Error: Expected a number for " + stateNames[i] + ", got " + args[i][width:] + helpMessage
 			}
 			stateValues[stateNames[i]] += relNum
 			continue
 		}
 
 		if stateNames[i] != "Month" {
-			relNum, error := strconv.Atoi(args[i])
+			absNum, error := strconv.Atoi(args[i])
 			if error != nil {
-				return "  Error: Expected a number for " + stateNames[i] + ", got " + args[i]
+				return "  Error: Expected a number for " + stateNames[i] + ", got " + args[i] + helpMessage
 			}
-			stateValues[stateNames[i]] += relNum
+			stateValues[stateNames[i]] = absNum
 
 		} else {
 
 			monthNum, error := strconv.Atoi(args[i])
 			if error == nil {
 				if monthNum < 1 || monthNum > 12 {
-					return "  Error: Expected Month number in range 1-12, got " + strconv.Itoa(monthNum)
+					return "  Error: Expected Month number in range 1-12, got " + strconv.Itoa(monthNum) + helpMessage
 				}
 				stateValues[stateNames[i]] = monthNum
+				continue
 			}
 
 			copy := strings.ToLower(args[i])
 
 			if validMonthCodes[copy] != 0 {
 				stateValues[stateNames[i]] = validMonthCodes[copy]
+				continue
 			}
 
-			return "  Error: Expected a valid month code. Got " + args[i]
+			return "  Error: Expected a valid month code. Got " + args[i] + helpMessage
 		}
 
 	}
@@ -131,9 +147,9 @@ func main() {
 
 		line = strings.Trim(line, " \n")
 
-		//if utf8.RuneCountInString(line) == 0 {
-		//  continue;
-		//}
+		if utf8.RuneCountInString(line) == 0 {
+			continue
+		}
 
 		arguments := strings.Split(line, " ")
 
