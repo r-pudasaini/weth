@@ -39,8 +39,10 @@ import (
 var internalTime time.Time
 var validMonthCodes = map[string]int{"january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12, "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
+var militaryTime bool
+
 var usageStrings = map[string]string{
-	"setTime": "  usage: settime <HOUR> <DAY> <MONTH> <YEAR>",
+	"setTime": "  usage: settime <HOUR> <DAY> <MONTH> <YEAR>", // TODO: make a better usage message than this nonsense.
 }
 
 func setTime(args []string) string {
@@ -54,10 +56,30 @@ func setTime(args []string) string {
 		return usageStrings["setTime"]
 	}
 
+	const helpMessage = "\n  for detailed usage, enter: settime --help"
+
+	if strings.HasPrefix(args[0], "--military=") {
+
+		userInput := strings.TrimPrefix(args[0], "--military=")
+
+		desiredVal, err := strconv.ParseBool(userInput)
+
+		if err != nil {
+			return "  usage: settime --military=<BOOLEAN VALUE>" + helpMessage
+		}
+
+		militaryTime = desiredVal
+
+		if desiredVal {
+			return "  military time enabled"
+		}
+
+		return "  military time disabled"
+
+	}
+
 	var stateValues = map[string]int{"Hour": internalTime.Hour(), "Day": internalTime.Day(), "Month": int(internalTime.Month()), "Year": internalTime.Year()}
 	var stateNames = [...]string{"Hour", "Day", "Month", "Year"}
-
-	const helpMessage = "\n  for detailed usage, enter: settime --help"
 
 	var bound = min(len(stateNames), len(args))
 
@@ -115,12 +137,41 @@ func setTime(args []string) string {
 
 	// TODO: when we add support for locations, we need this last parameter to be the timezone associated with the
 	// current standing location.
+
+	hour := ""
+
+	if !militaryTime {
+
+		if internalTime.Hour() > 12 {
+			hour = strconv.Itoa(stateValues["Hour"]%12) + "PM"
+
+		} else {
+			hour = strconv.Itoa(stateValues["Hour"]) + "AM"
+		}
+
+	} else {
+		hour = strconv.Itoa(stateValues["Hour"])
+	}
+
 	internalTime = time.Date(stateValues["Year"], time.Month(stateValues["Month"]), stateValues["Day"], stateValues["Hour"], 0, 0, 0, time.Local)
-	return "  set time to " + internalTime.Format(time.DateOnly) + " Hour: " + strconv.Itoa(internalTime.Hour())
+	return "  set time to: Hour: " + hour + ", " + internalTime.Format(time.DateOnly)
 }
 
 func getTime([]string) string {
-	return internalTime.Format(time.DateOnly) + " Hour: " + strconv.Itoa(internalTime.Hour())
+
+	hour := ""
+	if !militaryTime {
+		if internalTime.Hour() > 12 {
+			hour = strconv.Itoa(internalTime.Hour()%12) + "PM"
+
+		} else {
+			hour = strconv.Itoa(internalTime.Hour()) + "AM"
+		}
+
+	} else {
+		hour = strconv.Itoa(internalTime.Hour())
+	}
+	return "Hour: " + hour + ", " + internalTime.Format(time.DateOnly)
 }
 
 func main() {
@@ -131,11 +182,12 @@ func main() {
 
 	var command2func = make(map[string]func([]string) string)
 	internalTime = time.Now()
+	militaryTime = false
 
 	command2func["settime"] = setTime
 	command2func["time"] = getTime
 
-	for {
+	for { // Read, Eval, Print, Loop
 
 		fmt.Print("-> ")
 
