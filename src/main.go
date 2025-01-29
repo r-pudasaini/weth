@@ -38,11 +38,31 @@ import (
 
 var internalTime time.Time
 var validMonthCodes = map[string]int{"january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12, "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+var codesToMonth = map[int]string{1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
 
 var militaryTime bool
 
 var usageStrings = map[string]string{
 	"setTime": "  usage: settime <HOUR> <DAY> <MONTH> <YEAR>", // TODO: make a better usage message than this nonsense.
+}
+
+func printTime() string {
+	hour := ""
+
+	if !militaryTime {
+
+		if internalTime.Hour() > 12 {
+			hour = strconv.Itoa(internalTime.Hour()%12) + "PM"
+
+		} else {
+			hour = strconv.Itoa(internalTime.Hour()) + "AM"
+		}
+
+	} else {
+		hour = strconv.Itoa(internalTime.Hour()) + ":00"
+	}
+
+	return fmt.Sprintf("%s, %s %d, %d", hour, codesToMonth[int(internalTime.Month())], internalTime.Day(), internalTime.Year())
 }
 
 func setTime(args []string) string {
@@ -138,40 +158,12 @@ func setTime(args []string) string {
 	// TODO: when we add support for locations, we need this last parameter to be the timezone associated with the
 	// current standing location.
 
-	hour := ""
-
-	if !militaryTime {
-
-		if internalTime.Hour() > 12 {
-			hour = strconv.Itoa(stateValues["Hour"]%12) + "PM"
-
-		} else {
-			hour = strconv.Itoa(stateValues["Hour"]) + "AM"
-		}
-
-	} else {
-		hour = strconv.Itoa(stateValues["Hour"])
-	}
-
 	internalTime = time.Date(stateValues["Year"], time.Month(stateValues["Month"]), stateValues["Day"], stateValues["Hour"], 0, 0, 0, time.Local)
-	return "  set time to: Hour: " + hour + ", " + internalTime.Format(time.DateOnly)
+	return "  set time to: " + printTime()
 }
 
 func getTime([]string) string {
-
-	hour := ""
-	if !militaryTime {
-		if internalTime.Hour() > 12 {
-			hour = strconv.Itoa(internalTime.Hour()%12) + "PM"
-
-		} else {
-			hour = strconv.Itoa(internalTime.Hour()) + "AM"
-		}
-
-	} else {
-		hour = strconv.Itoa(internalTime.Hour())
-	}
-	return "Hour: " + hour + ", " + internalTime.Format(time.DateOnly)
+	return printTime()
 }
 
 func main() {
