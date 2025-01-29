@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -23,10 +24,6 @@ import (
 
 			Otherwise, an error message will be printed.
 
-		- settime --military=true
-				prints hourly information using military time if set to true,
-				uses AM/PM mode if false.
-
 		- now : displays very specific weather data in the current location, at the current time.
 
 		- hours <NUMBER> : displays specific weather daya for the next <NUMBER> of hours at and after *TIME*, at *LOCATION*
@@ -45,6 +42,16 @@ var militaryTime bool
 var usageStrings = map[string]string{
 	"setTime": "  usage: settime <HOUR> <DAY> <MONTH> <YEAR>", // TODO: make a better usage message than this nonsense.
 }
+
+type Location struct {
+	country string
+	region  string
+	city    string
+}
+
+var internalLocation Location
+
+var defaultLocation = Location{country: "USA", region: "New York", city: "New York City"}
 
 func printTime() string {
 	hour := ""
@@ -114,9 +121,6 @@ func setTime(args []string) string {
 
 		if runeValue == '/' {
 
-			// if the first char is a slash, then this is a relative value, which must be followed by a
-			// number. Thus, if we find a number, we just add it to its position in the state values array.
-
 			relNum, error := strconv.Atoi(args[i][width:])
 			if error != nil {
 				return "  Error: Expected a number for " + stateNames[i] + ", got " + args[i][width:] + helpMessage
@@ -166,7 +170,66 @@ func getTime([]string) string {
 	return printTime()
 }
 
+func getLocation([]string) string {
+	return fmt.Sprintf("Location: %s %s, %s", internalLocation.city, internalLocation.region, internalLocation.country)
+}
+
+func setLocation(args []string) string {
+
+	if len(args) == 0 {
+		internalLocation.city = defaultLocation.city
+		internalLocation.region = defaultLocation.region
+		internalLocation.country = defaultLocation.country
+		return fmt.Sprintf("Location: %s %s, %s", internalLocation.city, internalLocation.region, internalLocation.country)
+	}
+
+	var stateValues = map[string]string{"City": internalLocation.city, "Region": internalLocation.region, "Country": internalLocation.country}
+	var stateNames = [...]string{"City", "Region", "Country"}
+
+	bound := min(len(stateNames), len(args))
+
+	for i := 0; i < bound; i++ {
+
+		if args[i] == "*" {
+			continue
+		}
+
+		stateValues[stateNames[i]] = args[i]
+	}
+
+	internalLocation.city = stateValues["City"]
+	internalLocation.region = stateValues["Region"]
+	internalLocation.country = stateValues["Country"]
+	return fmt.Sprintf("Location: %s %s, %s", internalLocation.city, internalLocation.region, internalLocation.country)
+
+	// TODO: make sure the location we use is a valid location. IDK how we will do that.
+}
+
+func requestLocation() {
+
+	// get the location of the users address. We need their IP first.
+
+	host, err := os.Hostname()
+	if err != nil {
+		log.Fatal("Error: " + err.Error())
+	}
+
+	addrs, err := net.LookupIP(host)
+	if err != nil {
+		log.Fatal("Error: " + err.Error())
+	}
+
+	for _, addr := range addrs {
+		if ipv4 := addr.To4(); ipv4 != nil {
+			fmt.Println("IPv4: ", ipv4)
+		}
+	}
+
+}
+
 func main() {
+
+	//requestLocation()
 
 	fmt.Println("Welcome to the weth REPL! Type 'help' to print a list of commands")
 
@@ -174,10 +237,13 @@ func main() {
 
 	var command2func = make(map[string]func([]string) string)
 	internalTime = time.Now()
+	internalLocation = Location{country: "USA", region: "New York", city: "New York City"}
 	militaryTime = false
 
 	command2func["settime"] = setTime
 	command2func["time"] = getTime
+	command2func["loc"] = getLocation
+	command2func["setloc"] = setLocation
 
 	for { // Read, Eval, Print, Loop
 
