@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
-	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -44,14 +46,14 @@ var usageStrings = map[string]string{
 }
 
 type Location struct {
-	country string
-	region  string
-	city    string
+	Country  string `json:"country"`
+	Region   string `json:"region"`
+	City     string `json:"city"`
+	Timezone string `json:"timezone"`
 }
 
 var internalLocation Location
-
-var defaultLocation = Location{country: "USA", region: "New York", city: "New York City"}
+var defaultLocation Location
 
 func printTime() string {
 	hour := ""
@@ -171,19 +173,19 @@ func getTime([]string) string {
 }
 
 func getLocation([]string) string {
-	return fmt.Sprintf("Location: %s %s, %s", internalLocation.city, internalLocation.region, internalLocation.country)
+	return fmt.Sprintf("Location: %s %s, %s", internalLocation.City, internalLocation.Region, internalLocation.Country)
 }
 
 func setLocation(args []string) string {
 
 	if len(args) == 0 {
-		internalLocation.city = defaultLocation.city
-		internalLocation.region = defaultLocation.region
-		internalLocation.country = defaultLocation.country
-		return fmt.Sprintf("Location: %s %s, %s", internalLocation.city, internalLocation.region, internalLocation.country)
+		internalLocation.City = defaultLocation.City
+		internalLocation.Region = defaultLocation.Region
+		internalLocation.Country = defaultLocation.Country
+		return fmt.Sprintf("Location: %s %s, %s", internalLocation.City, internalLocation.Region, internalLocation.Country)
 	}
 
-	var stateValues = map[string]string{"City": internalLocation.city, "Region": internalLocation.region, "Country": internalLocation.country}
+	var stateValues = map[string]string{"City": internalLocation.City, "Region": internalLocation.Region, "Country": internalLocation.Country}
 	var stateNames = [...]string{"City", "Region", "Country"}
 
 	bound := min(len(stateNames), len(args))
@@ -197,47 +199,67 @@ func setLocation(args []string) string {
 		stateValues[stateNames[i]] = args[i]
 	}
 
-	internalLocation.city = stateValues["City"]
-	internalLocation.region = stateValues["Region"]
-	internalLocation.country = stateValues["Country"]
-	return fmt.Sprintf("Location: %s %s, %s", internalLocation.city, internalLocation.region, internalLocation.country)
+	internalLocation.City = stateValues["City"]
+	internalLocation.Region = stateValues["Region"]
+	internalLocation.Country = stateValues["Country"]
+	return fmt.Sprintf("Location: %s %s, %s", internalLocation.City, internalLocation.Region, internalLocation.Country)
 
 	// TODO: make sure the location we use is a valid location. IDK how we will do that.
 }
 
 func requestLocation() {
 
-	// get the location of the users address. We need their IP first.
-
-	host, err := os.Hostname()
+	resp, err := http.Get("https://api64.ipify.org")
 	if err != nil {
-		log.Fatal("Error: " + err.Error())
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	addrs, err := net.LookupIP(host)
-	if err != nil {
-		log.Fatal("Error: " + err.Error())
+	ipAddr := string(body)
+
+	locResp, locErr := http.Get("http://ip-api.com/json/" + ipAddr)
+
+	if locErr != nil {
+		log.Fatal(locErr)
 	}
 
-	for _, addr := range addrs {
-		if ipv4 := addr.To4(); ipv4 != nil {
-			fmt.Println("IPv4: ", ipv4)
-		}
+	defer resp.Body.Close()
+
+	body, err = io.ReadAll(locResp.Body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// now we need to parse this json response. How do we do that?
+
+	parseErr := json.Unmarshal(body, &defaultLocation)
+
+	if parseErr != nil {
+		log.Fatal(parseErr)
 	}
 
 }
 
 func main() {
 
-	//requestLocation()
+	requestLocation()
 
 	fmt.Println("Welcome to the weth REPL! Type 'help' to print a list of commands")
+	fmt.Printf("Using location: %s %s, %s\n", defaultLocation.City, defaultLocation.Region, defaultLocation.Country)
 
 	reader := bufio.NewReader(os.Stdin)
 
 	var command2func = make(map[string]func([]string) string)
 	internalTime = time.Now()
-	internalLocation = Location{country: "USA", region: "New York", city: "New York City"}
+
+	internalLocation = Location{Country: defaultLocation.Country, Region: defaultLocation.Region, City: defaultLocation.City}
 	militaryTime = false
 
 	command2func["settime"] = setTime
